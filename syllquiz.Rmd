@@ -1,0 +1,98 @@
+---
+title: "Syllabus Quiz for Math 150"
+author: "Ethan Ashby"
+date: 'due: Friday, January 29, 2021'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
+# install.packages("praise")
+# Only ever use install once, and always use it inside the console (look down to find
+# the console, right now you are in the RMarkdown file).  
+# The library command belongs in your markdown file, and you run it every time.
+library(praise)
+```
+
+
+The syllabus is an agreement between the professor and students.  It explains your responsibilities, lays out the structure, and gives you information on how best to achieve the course goals.  Like any agreement, it must be read carefully and referenced frequently to answer questions.  This fun activity will highlight some important parts of the syllabus and give you a chance to try out R!^[adapted from David White at Denison University.]
+
+### Instructions
+
+Answer each question below by typing a response.  Then knit the file to a compiled pdf, and submit it to Gradescope (via Sakai).
+
+Hint:  To compile to pdf, you might need to use the `tinytex` package (you'll know you need it if you can knit to html but not to pdf).  In the console (below, do you see where it says "Console"?) only one time ever, type the following.  Ask me if it doesn't work automatically for you.  (Don't spend hours figuring this part out, ask me immediately.)
+
+```
+install.packages('tinytex')
+tinytex::install_tinytex()
+```
+
+https://yihui.name/tinytex/
+
+
+#### Q1. 
+
+On which dates are the exams?
+
+Wednesday, March 17 and Wednesday, April 28th!
+
+After you've marked the exam dates in your calendar, answer the following question:  what type of calendar do you keep?  (e.g., Google calendar, outlook, paper journal, post-its all over your desk, etc.)
+
+Google calendar (and iphone reminders)
+
+#### Q2. 
+Provide three pieces of information from the syllabus related to class participation.
+
+1. Warm ups are due after every class (24 hr window)!
+2. The class is interactive, so attend if possible!
+3. Get active on Discord! Ask questions, do your mentorless pod, etc.
+
+
+#### Q3. 
+Will course notes be available and posted?  If so, where?
+
+Yep! Attached to Prof Hardin's personal website here: http://st47s.com/Math150/Notes/ 
+
+#### Q4. 
+What is the software program we are using for the class?  After watching the R video, ask one question that you have about R.  [If you are already familiar with R, you don't need to watch the video, but you surely can think up one question about R.]
+
+We are using R and Rstudio. Is it possible to change the Rstudio display (color, arrangement of windows, etc.)?
+
+#### Q5. 
+
+Run the code below one line at a time.  Provide a few words (either after hashtags or in writing below the R code) describing what each line of code is doing.
+
+```{r}
+set.seed(11)
+mydata <- c(1:10)  # if you want, your words of explanation can come after the hashtag
+mydata
+
+mydata^2
+
+sample(mydata, size = 25, replace = TRUE)
+mydata2 <- sample(mydata, size = 25, replace = TRUE)
+mydata2
+```
+
+Line 67 creates a vector `mydata` containing the integers between 1 and 10. Line 68 prints `mydata`. Line 70 squares each entry of the `mydata` vector. Line 72 takes a sample of size 25 from the vector `mydata` with replacement and stores it in an object named `mydata2`. Line 73 prints this `mydata2`.
+
+#### Q6. 
+Nice job!  Run the chunk of code below.  You might need to install the `praise` package.  See the top of this file.
+
+```{r}
+set.seed(11)
+praise()
+```
+
+Note:  if you want your output to remain constant, use the `set.seed()` function.  The function will control the randomness associated with the task you've asked of R.  For example, you asked R to sample from some integers.  Do you want the sample of integers to stay the same every time?  Well, use `set.seed()`!  The only argument you need for `set.seed()` is a single integer.  You can choose *any* integer you want.  And the function goes before (either right before or at the top of the file) the command where R is dong something random.  Here is an example of some code (which won't be run) where the randomness is controlled.  Try it yourself in your work above.
+
+```{r eval = FALSE}
+set.seed(47)
+sample(mydata, size = 25, replace = TRUE)
+```
+
+I've run the line over and over and get the same result. All is well on the Western front!
