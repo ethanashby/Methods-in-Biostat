@@ -1,0 +1,241 @@
+---
+title: "Math 150 - Methods in Biostatistics - Homework 9"
+author: "Ethan Ashby"
+date: "Friday, April 16, 2021"
+output: pdf_document
+---
+
+```{r global_options, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning=FALSE, fig.height=3, fig.width=5, 
+                      fig.align = "center")
+library(tidyverse)
+library(broom)
+library(survival)
+library(survminer)
+library(praise)
+library(gridExtra)
+```
+
+
+### Assignment Summary (Goals)
+* working with hazard functions as measures of survival (S(t) and h(t) are functions of each other!)
+* working with cumulative hazard functions
+
+## Important
+
+I put all the datasets into the Box folder (linked from Sakai), the same one which also contains the course videos.  I'm hoping that having the data in Box will be easier than having it in Sakai.  Note the odd format to the URL below.  `/shared/static/...csv`.  You should be able to read in any of the datasets using that format.  In terms of this week's HW, the code I've written should read it the data just fine for you.
+
+(Apropos of nothing, I find the following website to be very helpful in making markdown tables:  https://www.tablesgenerator.com/markdown_tables)
+
+
+#### Q1. PodQ
+Describe one thing you learned from someone in your pod this week (it could be: content, logistical help, background material, R information, etc.)  1-3 sentences.
+
+Annika's Youtube video for her internship is dropping tomorrow! Gonna go viral!
+
+#### Q2. Chp 9, E11
+
+Read text for description of data.
+
+```{r message=FALSE, warning=FALSE}
+fruitfly <- read_csv("https://pomona.box.com/shared/static/qnsl0sp0twdutz6azidxb5yt37boee7v", na="*")
+```
+
+(a) check proportional hazard assumptions for treatment KM curves.  Use `fun="cloglog"` inside the `ggsurvplot`.
+
+```{r fig.height=10, fig.width=10}
+surv1<-survival::survfit(Surv(Longevity, Censor)~ Partners, data=fruitfly)
+surv2<-survival::survfit(Surv(Longevity, Censor)~ Type, data=fruitfly)
+
+##########discretize continous vbls
+fruitfly_edit = fruitfly %>% mutate(Thorax_disc=ifelse(Thorax<0.7, "<0.7", ifelse(between(Thorax, 0.7, 0.8), "0.7-0.8", ifelse(between(Thorax, 0.8, 0.9), "0.8-0.9", ">0.9")))) %>% mutate(Sleep_disc=ifelse(Sleep<10, "<10", ifelse(between(Sleep, 10, 20), "10-20", ifelse(between(Sleep, 20, 40), "20-40", ">40"))))
+##########
+
+surv3<-survival::survfit(Surv(Longevity, Censor)~ Thorax_disc, data=fruitfly_edit)
+surv4<-survival::survfit(Surv(Longevity, Censor)~ Sleep_disc, data=fruitfly_edit)
+
+p1<-survminer::ggsurvplot(surv1, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Partners")
+p2<-survminer::ggsurvplot(surv2, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Type")
+p3<-survminer::ggsurvplot(surv3, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Thorax")
+p4<-survminer::ggsurvplot(surv4, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Sleep")
+
+arrange_ggsurvplots(list(p1, p2, p3, p4), ncol=2, nrow=2)
+```
+
+Plotting each explanatory variable (`Partners`, `Thorax`, `Type`, and `Sleep`) agains the $\log(-\log(S(t)))$ for the fruitflies largely supports the PH assumptions. Each plot shows curves that are roughly parallel; under proportional hazards, the difference between curves should be a constant vertical shift. This is mostly the case: the `Survival ~ Thorax` and `Survival~Sleep` show strong agreement with this assumption. `Survival~Partners` and `Survival~Type` show slight differences in slope between the lines, but it is likely not a major violation of the PH assumption. So we can proceed to use the Cox model with reasonable confidence that the PH assumption is satisfied.
+
+(b) use all explanatory variables and likelihood ratio test to come up with the "best" model. [Note that the structure of the likelihood ratio test here is identical to the one we used in logistic regression!  See: http://st47s.com/Math150/Notes/survival-analysis.html#multcoxph]
+
+* After you pipe the `coxph()` model into `glanc()` you will see a column called `logLik`.
+* The test statistics is $G = 2*(logLik_{bigger model} - logLik_{smaller model})$
+
+* The p-value will be calculated using a chisq distribution where the degrees of freedom are the number of extra coefficients which were estimated in the bigger model.
+
+First, let's fit a couple models to see if `Thorax` and `Sleep` should be encoded as continous or categorical variables:
+
+```{r}
+coxtest1<-coxph(Surv(Longevity, Censor)~Thorax_disc, data=fruitfly_edit)
+coxtest1 %>% tidy()
+```
+For the `Thorax` variable, I'm reasonably satisfied that $\ln{(HR)}$ is linear wrt `Thorax`, because approx 0.1 increases in the Thorax leads to approximately a -1.3 change in $\beta$ (can be seen by the differences in beta between baseline (0) to 0.7-0.8 (-1.36), and 0.7-0.8 and 0.8-0.9 (-2.76)).
+
+```{r}
+coxtest2<-coxph(Surv(Longevity, Censor)~Sleep_disc, data=fruitfly_edit)
+coxtest2 %>% tidy()
+```
+For the `Sleep` variable, I'm not seeing a linear relationship. So I'm gonan leave it encoded as a categorical variable
+
+```{r}
+coxfull<-coxph(Surv(Longevity, Censor)~ Partners+Type+Thorax+Sleep_disc, data=fruitfly_edit)
+coxfull %>% tidy()
+
+####test sleep_disc first
+coxred<-coxph(Surv(Longevity, Censor)~ Partners+Type+Thorax, data=fruitfly_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=3, lower.tail=FALSE)
+#p-value is big, so we can remove Sleep from the model
+
+####test Type next
+coxfull<-coxph(Surv(Longevity, Censor)~ Partners+Type+Thorax, data=fruitfly_edit)
+coxred<-coxph(Surv(Longevity, Censor)~ Partners+Thorax, data=fruitfly_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=1, lower.tail=FALSE) #p-value is big so we can exclude Type from the model
+
+####test Partners next
+coxfull<-coxph(Surv(Longevity, Censor)~ Partners+Thorax, data=fruitfly_edit)
+coxred<-coxph(Surv(Longevity, Censor)~ Thorax, data=fruitfly_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=1, lower.tail=FALSE) #p-value is big so we can exclude Partners from our model from the model
+
+####test thorax next
+coxfull<-coxph(Surv(Longevity, Censor) ~ Thorax, data=fruitfly_edit)
+coxred<-coxph(Surv(Longevity, Censor) ~ 1, data=fruitfly_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=1, lower.tail=FALSE) #p-value is tiny so we should retain Thorax in our model
+
+#### Final 
+coxfinal<-coxph(Surv(Longevity, Censor)~ Thorax, data=fruitfly_edit)
+```
+
+(c) using the final model, interpret each of the coefficients (in terms of hazard ratios). Don't forget that when a model has multiple variables, the coefficient estimate will be interpreted while keeping all other variables constant.
+ 
+```{r}
+coxfinal %>% tidy()
+```
+The hazard ratio associated with a 1 unit increase in Thorax length is $\exp(-11.7)=8.3 \times 10^{-6}$. That's crazy! Looks like having a big thorax is really good for survival!
+
+#### Q3. Chp 9, E12
+
+Read text for description of data.
+
+```{r message=FALSE, warning=FALSE}
+VAlung <- read_csv("https://pomona.box.com/shared/static/r6hoo1gawopkt0526xvwwze5fl3245de",
+                     na="*")
+```
+
+(a) check proportional hazard assumptions for treatment KM curves.  Use `fun="cloglog"` inside the `ggsurvplot`.  And/or use `cox.zph`.
+
+```{r fig.height=10, fig.width=10}
+#VAlung
+
+#########
+VAlung_edit<-VAlung %>% mutate(karno_disc=ifelse(karno<25, "<25", ifelse(between(karno, 25, 50), "25-50", ifelse(between(karno, 50, 75), "50-75", ">75")))) %>% mutate(diag_disc=ifelse(diagtime<10, "<10", ifelse(between(diagtime, 10, 20), "10-20", ifelse(between(diagtime, 20, 35), "20-30", ">30")))) %>% mutate(age_disc=ifelse(age<40, "<40", ifelse(between(age, 40, 50), "40-50", ifelse(between(age, 50, 60), "50-60", ifelse(between(age, 60, 70), "60-70", ">70")))))
+#########
+
+surv1<-survival::survfit(Surv(time, status)~ trt, data=VAlung_edit)
+surv2<-survival::survfit(Surv(time, status)~ karno_disc, data=VAlung_edit)
+surv3<-survival::survfit(Surv(time, status)~ diag_disc, data=VAlung_edit)
+surv4<-survival::survfit(Surv(time, status)~ age_disc, data=VAlung_edit)
+surv5<-survival::survfit(Surv(time, status)~ prior, data=VAlung_edit)
+surv6<-survival::survfit(Surv(time, status)~ celltype, data=VAlung_edit)
+
+p1<-survminer::ggsurvplot(surv1, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Trt")
+p2<-survminer::ggsurvplot(surv2, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Karno_Disc")
+p3<-survminer::ggsurvplot(surv3, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Diag_disc")
+p4<-survminer::ggsurvplot(surv4, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Age_disc")
+p5<-survminer::ggsurvplot(surv5, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ Prior")
+p6<-survminer::ggsurvplot(surv6, censor=TRUE, fun="cloglog")+ggtitle("Survival ~ celltype")
+
+arrange_ggsurvplots(list(p1, p2, p3, p4, p5, p6), ncol=3, nrow=2)
+```
+
+All the different survival curves are *roughly* parallel, indicating that proportional hazards is a reasonable assumption.
+
+(b) use all explanatory variables and likelihood ratio test to come up with the "best" model. 
+
+Let's first test whether any of these variables should be continuous
+```{r}
+coxtest1<-coxph(Surv(time, status)~karno_disc, data=VAlung_edit)
+coxtest1 %>% tidy()
+```
+Karno score estimates grow *roughly* linearly, so we will not include them as a continous variable.
+
+```{r}
+coxtest2<-coxph(Surv(time, status)~diag_disc, data=VAlung_edit)
+coxtest2 %>% tidy()
+```
+The diagonal times are not linear. So I will encode it as discrete.
+
+```{r}
+coxtest3<-coxph(Surv(time, status)~age_disc, data=VAlung_edit)
+coxtest3 %>% tidy()
+```
+I'm going to encode age as a continous variable, since 40-50, 50-60, and 60-70 show approximately the same differences in their estimates.
+
+```{r}
+coxfull<-coxph(Surv(time, status)~ trt+karno+diag_disc+age+prior+celltype, data=VAlung_edit)
+coxfull %>% tidy()
+
+####test prior first
+coxred<-coxph(Surv(time, status)~ trt+karno+diag_disc+age+celltype, data=VAlung_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=1, lower.tail=FALSE)
+#p-value is big (0.9), so we can remove Sleep from the model
+
+####test diag_disc next
+coxfull<-coxph(Surv(time, status)~ trt+karno+diag_disc+age+celltype, data=VAlung_edit)
+coxred<-coxph(Surv(time, status)~ trt+karno+age+celltype, data=VAlung_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=3, lower.tail=FALSE) #p-value is big (0.69) so we can exclude Type from the model
+
+####test age next
+coxfull<-coxph(Surv(time, status)~ trt+karno+age+celltype, data=VAlung_edit)
+coxred<-coxph(Surv(time, status)~ trt+karno+celltype, data=VAlung_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=1, lower.tail=FALSE) #p-value is big (0.34) so we can exclude Partners from our model from the model
+
+####test trt next
+coxfull<-coxph(Surv(time, status)~ trt+karno+celltype, data=VAlung_edit)
+coxred<-coxph(Surv(time, status)~ karno+celltype, data=VAlung_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=1, lower.tail=FALSE) #p-value is big (0.19) so we can exclude Partners from our model from the model
+
+####test celltype next
+coxfull<-coxph(Surv(time, status)~ karno+celltype, data=VAlung_edit)
+coxred<-coxph(Surv(time, status)~ karno, data=VAlung_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=3, lower.tail=FALSE) #p-value is small (0.0006) so we can include celltype
+
+####test karno next
+coxfull<-coxph(Surv(time, status)~ karno+celltype, data=VAlung_edit)
+coxred<-coxph(Surv(time, status)~ celltype, data=VAlung_edit)
+G=2*(glance(coxfull)$logLik-glance(coxred)$logLik)
+pchisq(G, df=1, lower.tail=FALSE) #p-value is small (4x10^(-9)) so we can include celltype
+
+#### Final 
+coxfinal<-coxph(Surv(time, status)~ karno+celltype, data=VAlung_edit)
+```
+
+(c) using the final model, interpret each of the coefficients (in terms of hazard ratios). Don't forget that when a model has multiple variables, the coefficient estimate will be interpreted while keeping all other variables constant.
+
+```{r}
+coxfinal %>% tidy()
+```
+The Hazard ratio associated with a 1 unit increase in Karnovsky score is $\exp(-0.0311)=0.969$, suggesting that a higher karnovsky score is good for survival. Then compared to the adeno cell type, the large cell type has an associated hazard ratio of $\exp(-0.832)=0.435$, the small cell has an associated hazard ratio of $\exp(-0.442)=0.643$, the squamous cell type has an associated hazard ratio of $\exp(-1.16)=0.313$.
+
+
+```{r}
+praise()
+```
+
+
